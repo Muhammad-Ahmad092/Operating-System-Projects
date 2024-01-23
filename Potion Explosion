@@ -1,0 +1,256 @@
+#include <iostream>
+#include <fstream>
+#include <cstdlib>
+#include <ctime>
+#include <thread>
+#include <mutex>
+#include <unistd.h>
+
+
+using namespace std;
+
+
+struct Ball {
+    string color;
+};
+
+struct Adventurer
+{
+
+    string adventurerName;
+    int adventureScore;
+    int craftedPotions;
+    Ball balls[10];  // Maximum 10 balls
+    bool hasMap;
+    string furniture;
+std::mutex adventurerMutex;
+
+    Adventurer(const string& playerName)
+ {
+        adventurerName = playerName;
+        adventureScore = 0;
+        craftedPotions = 0;
+        hasMap = false;
+        furniture = "Table";
+
+    }
+
+   void drawMarble()
+{
+     // std::lock_guard<std::mutex> lock(adventurerMutex);
+    if (adventureScore < 10)
+{
+        // Simulate drawing a magical item
+        Ball newBall = {"Unknown"};
+
+        switch (rand() % 4) {
+            case 0: newBall.color = "Red"; break;
+
+            case 1: newBall.color = "Blue"; break;
+
+            case 2: newBall.color = "Yellow"; break;
+
+            case 3: newBall.color = "Black"; break;
+        }
+
+        balls[adventureScore] = newBall;
+
+        cout << adventurerName << " drew a magical " << newBall.color << " marble!\n";
+        adventureScore++;
+
+        // Check for potion explosion (e.g., if the drawn marble is Red)
+        if (newBall.color == "Red")
+{
+            cout << "Potion Explosion! " << adventurerName << " gains an extra turn and draws another marble.\n";
+            drawMarble(); // Draw an extra marble
+
+        }
+
+    }
+        else {
+
+        cout << adventurerName << " has reached the maximum adventure score and cannot draw more marbles!\n";
+    }
+ // Example of using a pipe
+        int pipefd[2];
+        if (pipe(pipefd) == -1) {
+            cerr << "Error creating pipe\n";
+            exit(EXIT_FAILURE);
+        }
+}
+
+    void craftPotion()
+ {
+        // std::lock_guard<std::mutex> lock(adventurerMutex);
+        if (adventureScore >= 4)
+    {
+            // Simulate crafting a potion
+            cout << adventurerName << " crafted a potion!\n";
+            adventureScore -= 4;
+            craftedPotions++;
+        }
+        else {
+
+            cout << adventurerName << " does not have enough marbles to craft a potion.\n";
+        }
+    }
+
+    void displayInventory(ostream& out)
+{
+  // std::lock_guard<std::mutex> lock(adventurerMutex);
+        out << "Adventurer, " << adventurerName << "'s Inventory:\n";
+        out << "Adventure Score: " << adventureScore << "\n";
+        out << "Crafted Potions: " << craftedPotions << "\n";
+        out << "Balls: ";
+
+        for (int i = adventureScore - 1; i >= 0; --i)
+        {
+            out << balls[i].color << " ";
+        }
+
+        out << "\n";
+        out << "Map: " << (hasMap ? "Yes" : "No") << "\n";
+        out << "Furniture: " << furniture << "\n\n";
+    }
+};
+
+void switchTurn(Adventurer*& currentPlayer, Adventurer& player1, Adventurer& player2)
+{
+    currentPlayer = (currentPlayer == &player1) ? &player2 : &player1;
+}
+
+void playGame(Adventurer& adventurer1, Adventurer& adventurer2)
+{
+    const int maxTurns = 5;
+
+    for (int turn = 1; turn <= maxTurns; ++turn)
+       {
+
+        Adventurer* currentPlayer = (turn % 2 == 1) ? &adventurer1 : &adventurer2;
+
+        cout << "\nTurn " << turn << ": " << currentPlayer->adventurerName << "'s Turn\n";
+        currentPlayer->drawMarble();
+        currentPlayer->displayInventory(cout);
+
+        int choice;
+        while (true) {
+            cout << "Choose an action:\n";
+
+            cout << "1. Draw Marble\n";
+
+            cout << "2. Craft Potion\n";
+
+            cout << "3. Switch Turn\n";
+
+            if (cin >> choice)
+             {
+                break;
+            }
+               else {
+
+                cout << "Invalid input. Please enter a number.\n";
+                cin.clear();
+                cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            }
+        }
+
+        switch (choice)
+           {
+            case 1:
+                currentPlayer->drawMarble();
+                break;
+
+            case 2:
+                currentPlayer->craftPotion();
+                break;
+
+            case 3:
+                switchTurn(currentPlayer, adventurer1, adventurer2);
+                cout << "Turn switched to " << currentPlayer->adventurerName << ".\n";
+                break;
+
+            default:
+                cout << "Invalid choice. Try again.\n";
+                --turn;
+        }
+    }
+}
+
+int main()
+     {
+
+    srand(static_cast<unsigned int>(time(0)));
+
+     string name1, name2;
+
+    cout << "Enter Player 1's name: ";
+    cin >> name1;
+
+    cout << "Enter Player 2's name: ";
+    cin >> name2;
+
+    Adventurer adventurer1(name1);
+    Adventurer adventurer2(name2);
+
+    // Print the initial values for verification
+    cout << "Adventurer 1's Initial Inventory:\n";
+    adventurer1.displayInventory(cout);
+
+    cout << "Adventurer 2's Initial Inventory:\n";
+    adventurer2.displayInventory(cout);
+
+    thread gameThread(playGame, ref(adventurer1), ref(adventurer2));
+    gameThread.join();
+
+    ofstream file("game_data.txt");
+    if (file.is_open())
+    {
+
+        adventurer1.displayInventory(file);
+
+        adventurer2.displayInventory(file);
+
+        cout << "\nGame Over!\n";
+        cout << "Adventure Scores:\n";
+
+        cout << adventurer1.adventurerName << ": " << adventurer1.adventureScore << "\n";
+        cout << adventurer2.adventurerName << ": " << adventurer2.adventureScore << "\n";
+
+        cout << "Crafted Potions:\n";
+
+        cout << adventurer1.adventurerName << ": " << adventurer1.craftedPotions << "\n";
+        cout << adventurer2.adventurerName << ": " << adventurer2.craftedPotions << "\n";
+
+        if (adventurer1.adventureScore + adventurer1.craftedPotions > adventurer2.adventureScore + adventurer2.craftedPotions)
+        {
+            cout << "The victorious adventurer is: " << adventurer1.adventurerName << "\n";
+        } else if (adventurer1.adventureScore + adventurer1.craftedPotions < adventurer2.adventureScore + adventurer2.craftedPotions)
+        {
+            cout << "The victorious adventurer is: " << adventurer2.adventurerName << "\n";
+
+        }
+          else
+        {
+            cout << "It's a tie!\n";
+        }
+
+        file.close();
+
+    }
+        else
+        {
+          cout << "Unable to open the file.\n";
+        }
+ 
+int pipefd[2];
+    if (pipe(pipefd) == -1) {
+        cerr << "Error creating pipe\n";
+        exit(EXIT_FAILURE);
+    }
+
+    // Writing to the pipe
+    const char message[] = "Using pipes in main!";
+    write(pipefd[1], message, sizeof(message));
+    close(pipefd[1]);
+    return 0;
+}
